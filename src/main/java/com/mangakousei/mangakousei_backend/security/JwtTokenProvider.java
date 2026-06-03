@@ -11,9 +11,7 @@ import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.stereotype.Component;
 
 import javax.crypto.SecretKey;
-import java.util.Date;
-import java.util.List;
-import java.util.Objects;
+import java.util.*;
 import java.util.stream.Collectors;
 
 @Slf4j
@@ -29,8 +27,52 @@ public class JwtTokenProvider {
     @Value("${app.jwt.remember-me-expiration-milliseconds}")
     private int rememberMeExpirationMs;
 
+    @Value("${app.jwt.refresh-expirationMs-milliseconds}")
+    private int refreshExpirationMs;
+
     private SecretKey getKey() {
         return Keys.hmacShaKeyFor(jwtSecret.getBytes());
+    }
+
+    private String buildToken(String username, Map<String, Object> claims, long expirationMs) {
+        Date now = new Date();
+        Date expiryDate = new Date(now.getTime() + expirationMs);
+
+        JwtBuilder builder = Jwts.builder()
+                .subject(username)
+                .issuedAt(now)
+                .expiration(expiryDate)
+                .signWith(getKey());
+
+        claims.forEach(builder::claim);
+
+        return builder.compact();
+    }
+
+    private UserDetails extractUserDetails(Authentication authentication) {
+        if (authentication.getPrincipal() instanceof UserDetails userDetails) {
+            return userDetails;
+        }
+        throw new IllegalStateException("Invalid authentication");
+    }
+
+    public String generateAccessToken(Authentication authentication) {
+        UserDetails user = extractUserDetails(authentication);
+        Map<String, Object> claims = new HashMap<>();
+        claims.put("roles", user.getAuthorities().stream()
+                .map(GrantedAuthority::getAuthority)
+                .collect(Collectors.toList()));
+        return buildToken(user.getUsername(), claims, jwtExpirationMs);
+    }
+
+    public String generateRefreshToken(Authentication authentication, boolean isRememberMe) {
+        UserDetails user = extractUserDetails(authentication);
+        long expirationMs = isRememberMe ? rememberMeExpirationMs : refreshExpirationMs;
+
+        Map<String, Object> claims = new HashMap<>();
+        claims.put("token_type", "refresh");
+
+        return buildToken(user.getUsername(), claims, expirationMs);
     }
 
     public String generateToken(Authentication authentication, boolean isRememberMe) {

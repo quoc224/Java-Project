@@ -33,8 +33,8 @@ public class AuthService {
                 )
         );
 
-        String accessToken = jwtTokenProvider.generateToken(authentication, false);
-        String refreshToken = jwtTokenProvider.generateToken(authentication, request.isRememberMe());
+        String accessToken = jwtTokenProvider.generateAccessToken(authentication);
+        String refreshToken = jwtTokenProvider.generateRefreshToken(authentication, request.isRememberMe());
 
         long maxAgeInSeconds = request.isRememberMe() ? 7 * 24 * 60 * 60 : 24 * 60 * 60;
 
@@ -78,7 +78,7 @@ public class AuthService {
                 null,
                 userDetails.getAuthorities()
         );
-        String newAccessToken = jwtTokenProvider.generateToken(authentication, false);
+        String newAccessToken = jwtTokenProvider.generateAccessToken(authentication);
 
         return LoginRes.builder()
                 .accessToken(newAccessToken)
