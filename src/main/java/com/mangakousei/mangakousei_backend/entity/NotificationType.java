@@ -15,6 +15,7 @@ import lombok.EqualsAndHashCode;
 @EqualsAndHashCode(onlyExplicitlyIncluded = true)
 @Entity
 @Table(name = "notification_types")
+public class NotificationType{
     @Id
     @GeneratedValue(strategy =  GenerationType.IDENTITY)
     @Column(name = "notification_type_id")
