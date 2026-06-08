@@ -2,6 +2,7 @@ package com.mangakousei.mangakousei_backend.controller;
 
 import com.mangakousei.mangakousei_backend.dto.response.ApiResponse;
 import com.mangakousei.mangakousei_backend.dto.request.LoginReq;
+import com.mangakousei.mangakousei_backend.dto.request.RegisterReq;
 import com.mangakousei.mangakousei_backend.dto.response.LoginRes;
 import com.mangakousei.mangakousei_backend.dto.response.UserInfoRes;
 import com.mangakousei.mangakousei_backend.service.AuthService;
@@ -26,6 +27,14 @@ public class AuthController {
     ) {
         LoginRes loginRes = authService.login(request, response);
         return ResponseEntity.ok(ApiResponse.success("Login successful", loginRes));
+    }
+
+    @PostMapping("/register")
+    public ResponseEntity<ApiResponse<UserInfoRes>> register(
+            @RequestBody @Valid RegisterReq request
+    ) {
+        UserInfoRes userInfo = authService.register(request);
+        return ResponseEntity.ok(ApiResponse.success("Register successful", userInfo));
     }
 
     @PostMapping("/refresh")
