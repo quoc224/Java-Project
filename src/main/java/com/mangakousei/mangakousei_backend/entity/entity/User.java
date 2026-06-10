@@ -47,6 +47,9 @@ public class User {
     @Column(name = "created_at")
     private LocalDateTime createdAt;
 
+    @Column(name = "avatar_url")
+    private String avatarUrl;
+
     @ManyToMany(fetch = FetchType.EAGER)
     @Builder.Default
     @JoinTable(
@@ -110,6 +113,14 @@ public class User {
     @JsonManagedReference("AssistantPaymentId")
     @Builder.Default
     private List<Payment> paymentAssistants = new ArrayList<>();
+
+    @OneToMany(mappedBy = "mangaka", cascade = CascadeType.ALL)
+    @JsonManagedReference("MangakaProposals")
+    private List<SeriesProposal> submittedProposals;
+
+    @OneToMany(mappedBy = "reviewedBy")
+    @JsonManagedReference("EditorReviewedProposals")
+    private List<SeriesProposal> reviewedProposals;
 
     @PrePersist
     protected void onCreate() {
