@@ -75,35 +75,14 @@ public class SeriesProposalService {
         return new ProposalRes(saved.getProposalId(), saved.getStatus());
     }
 
+    public List<ProposalListRes> getAdminPendingProposals() {
+        List<Object[]> rows = proposalRepository.findPendingAdminProposals();
+        return mapRowsToProposalList(rows);
+    }
+
     public List<ProposalListRes> getProposals(Long tantouId, String status, String search) {
         List<Object[]> rows = proposalRepository.findProposalsRaw(tantouId, status, search);
-        List<ProposalListRes> result = new ArrayList<>();
-    
-        for (Object[] row : rows) {
-            ProposalListRes dto = new ProposalListRes();
-            dto.setProposalId(((Number) row[0]).longValue());
-            dto.setWorkingTitle((String) row[1]);
-            dto.setSynopsis((String) row[2]);
-            dto.setTargetAudience((String) row[3]);
-            dto.setStatus((String) row[4]);
-            dto.setCreatedAt((LocalDateTime) row[5]);
-            dto.setNameSummary((String) row[6]);
-            dto.setRejectionReason((String) row[7]);
-            dto.setRevisionFeedback((String) row[8]);
-            dto.setSketchImageUrl((String) row[9]);
-    
-            ProposalListRes.MangakaInfo mangaka = new ProposalListRes.MangakaInfo();
-            mangaka.setUserId(((Number) row[10]).longValue());
-            mangaka.setFullName((String) row[11]);
-            mangaka.setAvatarUrl((String) row[12]);
-            dto.setMangaka(mangaka);
-    
-            dto.setGenres(parseGenreList((String) row[13]));
-            dto.setCharacters(parseCharacterList((String) row[14]));
-    
-            result.add(dto);
-        }
-        return result;
+        return mapRowsToProposalList(rows);
     }
 
     @Transactional
@@ -121,7 +100,9 @@ public class SeriesProposalService {
         User currentUser = getCurrentUser();
 
         switch (request.getDecision()) {
-            case "approve" -> proposal.setStatus("approved");
+            case "approve" -> {
+            proposal.setStatus("pending_admin");
+            }
             case "revision" -> {
                 if (request.getFeedback() == null || request.getFeedback().isBlank())
                     throw new CustomAppException(
@@ -141,6 +122,45 @@ public class SeriesProposalService {
         }
 
         proposal.setReviewedBy(currentUser);
+        proposal.setDecidedAt(LocalDateTime.now());
+        proposal.setUpdatedAt(LocalDateTime.now());
+        proposalRepository.save(proposal);
+    }
+
+    @Transactional
+    public void adminReviewProposal(Long proposalId, ReviewProposalReq request) {
+        SeriesProposal proposal = proposalRepository.findById(proposalId)
+                .orElseThrow(() -> new CustomAppException(
+                        "Không tìm thấy proposal", HttpStatus.NOT_FOUND));
+
+        if (!"pending_admin".equals(proposal.getStatus())) {
+            throw new CustomAppException(
+                    "Proposal này không ở trạng thái chờ admin phê duyệt",
+                    HttpStatus.BAD_REQUEST);
+        }
+
+        User admin = getCurrentUser();
+
+        switch (request.getDecision()) {
+            case "approve" -> proposal.setStatus("approved");
+            case "reject" -> {
+                if (request.getReason() == null || request.getReason().isBlank())
+                    throw new CustomAppException(
+                            "Lý do từ chối không được để trống", HttpStatus.BAD_REQUEST);
+                proposal.setStatus("rejected");
+                proposal.setRejectionReason(request.getReason());
+            }
+            case "revision" -> {
+                if (request.getFeedback() == null || request.getFeedback().isBlank())
+                    throw new CustomAppException(
+                            "Phản hồi yêu cầu sửa không được để trống", HttpStatus.BAD_REQUEST);
+                proposal.setStatus("revision");
+                proposal.setRevisionFeedback(request.getFeedback());
+            }
+            default -> throw new CustomAppException(
+                    "Decision không hợp lệ", HttpStatus.BAD_REQUEST);
+        }
+
         proposal.setDecidedAt(LocalDateTime.now());
         proposal.setUpdatedAt(LocalDateTime.now());
         proposalRepository.save(proposal);
@@ -187,5 +207,34 @@ public class SeriesProposalService {
         } catch (Exception e) {
             throw new RuntimeException("Failed to parse characters JSON: " + json, e);
         }
+    }
+
+    private List<ProposalListRes> mapRowsToProposalList(List<Object[]> rows) {
+        List<ProposalListRes> result = new ArrayList<>();
+        for (Object[] row : rows) {
+            ProposalListRes dto = new ProposalListRes();
+            dto.setProposalId(((Number) row[0]).longValue());
+            dto.setWorkingTitle((String) row[1]);
+            dto.setSynopsis((String) row[2]);
+            dto.setTargetAudience((String) row[3]);
+            dto.setStatus((String) row[4]);
+            dto.setCreatedAt((LocalDateTime) row[5]);
+            dto.setNameSummary((String) row[6]);
+            dto.setRejectionReason((String) row[7]);
+            dto.setRevisionFeedback((String) row[8]);
+            dto.setSketchImageUrl((String) row[9]);
+
+            ProposalListRes.MangakaInfo mangaka = new ProposalListRes.MangakaInfo();
+            mangaka.setUserId(((Number) row[10]).longValue());
+            mangaka.setFullName((String) row[11]);
+            mangaka.setAvatarUrl((String) row[12]);
+            dto.setMangaka(mangaka);
+
+            dto.setGenres(parseGenreList((String) row[13]));
+            dto.setCharacters(parseCharacterList((String) row[14]));
+
+            result.add(dto);
+        }
+        return result;
     }
 }

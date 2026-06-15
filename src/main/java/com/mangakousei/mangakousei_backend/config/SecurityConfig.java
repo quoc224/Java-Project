@@ -64,6 +64,7 @@ public class SecurityConfig {
                                 "/api/proposals",
                                 "/api/tantou/**",
                                 "/api/mangaka/**",
+                                "/api/admin/**",
                                 "/api/public/**"
                         ).permitAll()
                         .anyRequest().authenticated()

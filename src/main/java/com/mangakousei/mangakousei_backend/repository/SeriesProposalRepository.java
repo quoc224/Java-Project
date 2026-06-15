@@ -52,4 +52,24 @@ public interface SeriesProposalRepository extends JpaRepository<SeriesProposal, 
             @Param("tantouId") Long tantouId,
             @Param("status") String status,
             @Param("search") String search);
+
+    @Query(value = "SELECT " +
+            "sp.proposal_id, sp.working_title, sp.synopsis, sp.target_audience, " +
+            "sp.status, sp.created_at, sp.name_summary, sp.rejection_reason, sp.revision_feedback, sp.sketch_image_url, " +
+            "u.user_id, u.full_name, u.avatar_url, " +
+            "COALESCE((" +
+            "   SELECT json_agg(json_build_object('genre_id', g.genre_id, 'name', g.genre_name)) " +
+            "   FROM proposal_genres pg JOIN genres g ON pg.genre_id = g.genre_id " +
+            "   WHERE pg.proposal_id = sp.proposal_id" +
+            "), '[]'::json) AS genres_json, " +
+            "COALESCE((" +
+            "   SELECT json_agg(json_build_object('character_id', pc.character_id, 'character_name', pc.character_name, 'role', pc.role, 'description', pc.description)) " +
+            "   FROM proposal_characters pc " +
+            "   WHERE pc.proposal_id = sp.proposal_id" +
+            "), '[]'::json) AS characters_json " +
+            "FROM series_proposals sp " +
+            "JOIN users u ON sp.mangaka_id = u.user_id " +
+            "WHERE sp.status = 'pending_admin'",
+            nativeQuery = true)
+    List<Object[]> findPendingAdminProposals();
 }
