@@ -1,8 +1,10 @@
 package com.mangakousei.mangakousei_backend.controller;
 
 import com.mangakousei.mangakousei_backend.dto.response.ApiResponse;
+import com.mangakousei.mangakousei_backend.dto.response.MangakaSeriesRes;
 import com.mangakousei.mangakousei_backend.dto.response.UserInfoRes;
 import com.mangakousei.mangakousei_backend.exception.CustomAppException;
+import com.mangakousei.mangakousei_backend.service.MangakaSeriesService;
 import com.mangakousei.mangakousei_backend.service.TantouMangakaService;
 import com.mangakousei.mangakousei_backend.util.SecurityUtils;
 import lombok.RequiredArgsConstructor;
@@ -18,6 +20,7 @@ import java.util.List;
 public class TantouMangakaController {
 
     private final TantouMangakaService tantouMangakaService;
+    private final MangakaSeriesService mangakaSeriesService;
 
     @GetMapping("/assigned-tantous")
     public ResponseEntity<ApiResponse<List<UserInfoRes>>> getMyAssignedTantous() {
@@ -44,5 +47,12 @@ public class TantouMangakaController {
         List<UserInfoRes> tantous = tantouMangakaService.getActiveTantousForMangaka(mangakaId);
         
         return ResponseEntity.ok(ApiResponse.success("", tantous));
+    }
+
+    @GetMapping("/series")
+    public ResponseEntity<?> getMySeries() {
+        Long currentUserId = SecurityUtils.getCurrentUserId();
+        List<MangakaSeriesRes> series = mangakaSeriesService.getSeriesByMangaka(currentUserId);
+        return ResponseEntity.ok(ApiResponse.success("Fetched series", series));
     }
 }
