@@ -5,9 +5,17 @@ import com.mangakousei.mangakousei_backend.dto.request.ReviewProposalReq;
 import com.mangakousei.mangakousei_backend.dto.response.ProposalListRes;
 import com.mangakousei.mangakousei_backend.dto.response.ProposalRes;
 import com.mangakousei.mangakousei_backend.entity.entity.*;
+import com.mangakousei.mangakousei_backend.entity.status.SeriesStatus;
+import com.mangakousei.mangakousei_backend.entity.type.DecisionType;
+import com.mangakousei.mangakousei_backend.entity.type.PublicationType;
 import com.mangakousei.mangakousei_backend.exception.CustomAppException;
+import com.mangakousei.mangakousei_backend.repository.DecisionTypeRepository;
 import com.mangakousei.mangakousei_backend.repository.GenreRepository;
+import com.mangakousei.mangakousei_backend.repository.PublicationDecisionRepository;
+import com.mangakousei.mangakousei_backend.repository.PublicationTypeRepository;
 import com.mangakousei.mangakousei_backend.repository.SeriesProposalRepository;
+import com.mangakousei.mangakousei_backend.repository.SeriesRepository;
+import com.mangakousei.mangakousei_backend.repository.SeriesStatusRepository;
 import com.mangakousei.mangakousei_backend.repository.TantouMangakaAssignmentRepository;
 import com.mangakousei.mangakousei_backend.repository.UserRepository;
 import lombok.RequiredArgsConstructor;
@@ -31,6 +39,11 @@ public class SeriesProposalService {
     private final GenreRepository genreRepository;
     private final UserRepository userRepository;
     private final TantouMangakaAssignmentRepository assignmentRepository;
+    private final SeriesRepository seriesRepository;
+    private final SeriesStatusRepository seriesStatusRepository;
+    private final PublicationTypeRepository publicationTypeRepository;
+    private final DecisionTypeRepository decisionTypeRepository;
+    private final PublicationDecisionRepository publicationDecisionRepository;
 
     public ProposalRes createProposal(CreateProposalReq request) {
         User mangaka = getCurrentUser();
@@ -142,28 +155,27 @@ public class SeriesProposalService {
         User admin = getCurrentUser();
 
         switch (request.getDecision()) {
-            case "approve" -> proposal.setStatus("approved");
+            case "approve" -> {
+                proposal.setStatus("approved");
+                proposal.setDecidedAt(LocalDateTime.now());
+                proposal.setUpdatedAt(LocalDateTime.now());
+                proposalRepository.save(proposal);
+
+                createSeriesFromProposal(proposal, admin);
+            }
             case "reject" -> {
                 if (request.getReason() == null || request.getReason().isBlank())
                     throw new CustomAppException(
                             "Lý do từ chối không được để trống", HttpStatus.BAD_REQUEST);
                 proposal.setStatus("rejected");
                 proposal.setRejectionReason(request.getReason());
-            }
-            case "revision" -> {
-                if (request.getFeedback() == null || request.getFeedback().isBlank())
-                    throw new CustomAppException(
-                            "Phản hồi yêu cầu sửa không được để trống", HttpStatus.BAD_REQUEST);
-                proposal.setStatus("revision");
-                proposal.setRevisionFeedback(request.getFeedback());
+                proposal.setDecidedAt(LocalDateTime.now());
+                proposal.setUpdatedAt(LocalDateTime.now());
+                proposalRepository.save(proposal);
             }
             default -> throw new CustomAppException(
                     "Decision không hợp lệ", HttpStatus.BAD_REQUEST);
         }
-
-        proposal.setDecidedAt(LocalDateTime.now());
-        proposal.setUpdatedAt(LocalDateTime.now());
-        proposalRepository.save(proposal);
     }
 
     @Transactional
@@ -236,5 +248,59 @@ public class SeriesProposalService {
             result.add(dto);
         }
         return result;
+    }
+
+    private void createSeriesFromProposal(SeriesProposal proposal, User admin) {
+ 
+        SeriesStatus approvedStatus = seriesStatusRepository
+                .findBySeriesStatusName("approved")
+                .or(() -> seriesStatusRepository.findBySeriesStatusName("active"))
+                .or(() -> seriesStatusRepository.findAll().stream().findFirst())
+                .orElseThrow(() -> new CustomAppException(
+                        "Không tìm thấy SeriesStatus trong database",
+                        HttpStatus.INTERNAL_SERVER_ERROR));
+ 
+        PublicationType publicationType = publicationTypeRepository
+                .findByPublicationTypeName("manga")
+                .or(() -> publicationTypeRepository.findByPublicationTypeName("Manga"))
+                .or(() -> publicationTypeRepository.findAll().stream().findFirst())
+                .orElseThrow(() -> new CustomAppException(
+                        "Không tìm thấy PublicationType trong database",
+                        HttpStatus.INTERNAL_SERVER_ERROR));
+ 
+        DecisionType approvedDecisionType = decisionTypeRepository
+                .findByDecisionTypeName("approved")
+                .or(() -> decisionTypeRepository.findByDecisionTypeName("approve"))
+                .or(() -> decisionTypeRepository.findAll().stream().findFirst())
+                .orElseThrow(() -> new CustomAppException(
+                        "Không tìm thấy DecisionType 'approved' trong database",
+                        HttpStatus.INTERNAL_SERVER_ERROR));
+ 
+        List<Genre> genres = proposal.getProposalGenres().stream()
+                .map(pg -> pg.getGenre())
+                .toList();
+ 
+        Series series = Series.builder()
+                .title(proposal.getWorkingTitle())
+                .description(proposal.getSynopsis())
+                .creator(proposal.getMangaka())
+                .editor(proposal.getAssignedTantou())
+                .seriesStatus(approvedStatus)
+                .publicationType(publicationType)
+                .approvedAt(LocalDateTime.now())
+                .genres(new java.util.ArrayList<>(genres))
+                .build();
+ 
+        Series savedSeries = seriesRepository.save(series);
+ 
+        PublicationDecision decision = new PublicationDecision();
+        decision.setSeries(savedSeries);
+        decision.setDecisionType(approvedDecisionType);
+        decision.setDecider(admin);
+        decision.setReason("Admin phê duyệt proposal #"
+                + proposal.getProposalId()
+                + " - \"" + proposal.getWorkingTitle() + "\"");
+ 
+        publicationDecisionRepository.save(decision);
     }
 }
