@@ -15,4 +15,5 @@ public interface SeriesRepository extends JpaRepository<Series, Long> {
     long countPagesByCreatorUserId(@Param("userId") Long userId);
 
     List<Series> findByCreatorUserIdOrderByApprovedAtDesc(Long userId);
+    List<Series> findByEditorUserIdOrderByApprovedAtDesc(Long editorId);
 }

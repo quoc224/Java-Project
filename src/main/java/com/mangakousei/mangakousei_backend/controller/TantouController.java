@@ -2,6 +2,8 @@ package com.mangakousei.mangakousei_backend.controller;
 
 import com.mangakousei.mangakousei_backend.dto.response.ApiResponse;
 import com.mangakousei.mangakousei_backend.dto.response.InboxItemRes;
+import com.mangakousei.mangakousei_backend.dto.response.TantouSeriesRes;
+import com.mangakousei.mangakousei_backend.service.TantouSeriesService;
 import com.mangakousei.mangakousei_backend.service.TantouService;
 import com.mangakousei.mangakousei_backend.util.SecurityUtils;
 import lombok.RequiredArgsConstructor;
@@ -18,6 +20,7 @@ import java.util.List;
 public class TantouController {
 
     private final TantouService tantouService;
+    private final TantouSeriesService tantouSeriesService;
 
     @GetMapping("/inbox")
     public ResponseEntity<ApiResponse<List<InboxItemRes>>> getInbox() {
@@ -28,5 +31,12 @@ public class TantouController {
                         tantouService.getInbox(tantouId)
                 )
         );
+    }
+
+    @GetMapping("/series")
+    public ResponseEntity<?> getMySeries() {
+        Long tantouId = SecurityUtils.getCurrentUserId();
+        List<TantouSeriesRes> series = tantouSeriesService.getSeriesByTantou(tantouId);
+        return ResponseEntity.ok(ApiResponse.success("Fetched series", series));
     }
 }
