@@ -1,12 +1,15 @@
 package com.mangakousei.mangakousei_backend.service;
 
+import com.mangakousei.mangakousei_backend.dto.request.UpdateSeriesReq;
 import com.mangakousei.mangakousei_backend.dto.response.MangakaSeriesRes;
 import com.mangakousei.mangakousei_backend.entity.entity.Genre;
 import com.mangakousei.mangakousei_backend.entity.entity.PublicationSchedule;
 import com.mangakousei.mangakousei_backend.entity.entity.Series;
 import com.mangakousei.mangakousei_backend.exception.CustomAppException;
+import com.mangakousei.mangakousei_backend.repository.GenreRepository;
 import com.mangakousei.mangakousei_backend.repository.PublicationScheduleRepository;
 import com.mangakousei.mangakousei_backend.repository.SeriesRepository;
+import jakarta.transaction.Transactional;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
@@ -22,6 +25,7 @@ public class MangakaSeriesService {
 
     private final SeriesRepository seriesRepository;
     private final PublicationScheduleRepository scheduleRepository;
+    private final GenreRepository genreRepository;
 
     private static final DateTimeFormatter DATE_FMT =
             DateTimeFormatter.ofPattern("dd/MM/yyyy");
@@ -71,5 +75,33 @@ public class MangakaSeriesService {
                         "Không tìm thấy series hoặc bạn không có quyền truy cập",
                         HttpStatus.NOT_FOUND));
         return toRes(series);
+    }
+
+    @Transactional
+    public MangakaSeriesRes updateSeries(Long seriesId, Long mangakaId, UpdateSeriesReq req) {
+        Series series = seriesRepository
+                .findBySeriesIdAndCreatorUserId(seriesId, mangakaId)
+                .orElseThrow(() -> new CustomAppException(
+                        "Không tìm thấy series hoặc bạn không có quyền",
+                        HttpStatus.NOT_FOUND));
+
+        series.setTitle(req.getTitle());
+        series.setDescription(req.getDescription());
+
+        if (req.getCoverImageUrl() != null && !req.getCoverImageUrl().isBlank()) {
+            series.setCoverImageUrl(req.getCoverImageUrl());
+        }
+
+        if (req.getGenreIds() != null) {
+            List<Genre> genres = req.getGenreIds().stream()
+                    .map(id -> genreRepository.findById(id)
+                            .orElseThrow(() -> new CustomAppException(
+                                    "Genre không tồn tại: " + id,
+                                    HttpStatus.BAD_REQUEST)))
+                    .collect(java.util.stream.Collectors.toList());
+            series.setGenres(genres);
+        }
+
+        return toRes(seriesRepository.save(series));
     }
 }

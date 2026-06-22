@@ -1,5 +1,6 @@
 package com.mangakousei.mangakousei_backend.controller;
 
+import com.mangakousei.mangakousei_backend.dto.request.UpdateSeriesReq;
 import com.mangakousei.mangakousei_backend.dto.response.ApiResponse;
 import com.mangakousei.mangakousei_backend.dto.response.MangakaSeriesRes;
 import com.mangakousei.mangakousei_backend.dto.response.UserInfoRes;
@@ -7,6 +8,7 @@ import com.mangakousei.mangakousei_backend.exception.CustomAppException;
 import com.mangakousei.mangakousei_backend.service.MangakaSeriesService;
 import com.mangakousei.mangakousei_backend.service.TantouMangakaService;
 import com.mangakousei.mangakousei_backend.util.SecurityUtils;
+import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 
 import org.springframework.http.HttpStatus;
@@ -61,5 +63,14 @@ public class TantouMangakaController {
         Long mangakaId = SecurityUtils.getCurrentUserId();
         MangakaSeriesRes result = mangakaSeriesService.getSeriesDetail(seriesId, mangakaId);
         return ResponseEntity.ok(ApiResponse.success("Fetched series detail", result));
+    }
+
+    @PutMapping("/series/{seriesId}")
+    public ResponseEntity<?> updateSeries(
+            @PathVariable Long seriesId,
+            @Valid @RequestBody UpdateSeriesReq req) {
+        Long mangakaId = SecurityUtils.getCurrentUserId();
+        MangakaSeriesRes result = mangakaSeriesService.updateSeries(seriesId, mangakaId, req);
+        return ResponseEntity.ok(ApiResponse.success("Series đã được cập nhật", result));
     }
 }
