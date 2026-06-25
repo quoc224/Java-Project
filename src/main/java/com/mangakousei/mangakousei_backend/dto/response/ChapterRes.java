@@ -18,4 +18,9 @@ public class ChapterRes {
     private List<PageDeadlineRes> pageDeadlines;
     private long totalDeadlines;
     private long submittedDeadlines;
+
+    private Long seriesId;
+    private String seriesTitle;
+    private String mangakaName;
+    private String mangakaAvatarUrl;
 }

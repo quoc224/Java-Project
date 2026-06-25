@@ -1,6 +1,7 @@
 package com.mangakousei.mangakousei_backend.service;
 
 import com.mangakousei.mangakousei_backend.dto.request.CreateChapterReq;
+import com.mangakousei.mangakousei_backend.dto.request.ReviewPageGroupReq;
 import com.mangakousei.mangakousei_backend.dto.request.SetPageDeadlineReq;
 import com.mangakousei.mangakousei_backend.dto.response.ChapterRes;
 import com.mangakousei.mangakousei_backend.dto.response.PageDeadlineRes;
@@ -34,6 +35,16 @@ public class ChapterService {
                 .findBySeriesSeriesIdOrderByChapterNumberAsc(seriesId)
                 .stream()
                 .map(this::toRes)
+                .collect(Collectors.toList());
+    }
+
+    public List<ChapterRes> getSubmittedChaptersForTantou() {
+        User tantou = getCurrentUser();
+        return chapterRepository
+                .findBySeriesEditorUserIdAndChapterStatusChapterStatusNameOrderByCreatedAtDesc(
+                        tantou.getUserId(), "pages_submitted")
+                .stream()
+                .map(this::toResWithSeries)
                 .collect(Collectors.toList());
     }
 
@@ -114,9 +125,9 @@ public class ChapterService {
                 .orElseThrow(() -> new CustomAppException(
                         "Không tìm thấy deadline", HttpStatus.NOT_FOUND));
 
-        if ("submitted".equals(deadline.getStatus())) {
+        if ("submitted".equals(deadline.getStatus()) || "approved".equals(deadline.getStatus())) {
             throw new CustomAppException(
-                    "Không thể sửa deadline đã được nộp", HttpStatus.BAD_REQUEST);
+                    "Không thể sửa deadline đã được nộp hoặc duyệt", HttpStatus.BAD_REQUEST);
         }
 
         if (req.getPageFrom() > req.getPageTo()) {
@@ -137,9 +148,9 @@ public class ChapterService {
                 .orElseThrow(() -> new CustomAppException(
                         "Không tìm thấy deadline", HttpStatus.NOT_FOUND));
 
-        if ("submitted".equals(deadline.getStatus())) {
+        if ("submitted".equals(deadline.getStatus()) || "approved".equals(deadline.getStatus())) {
             throw new CustomAppException(
-                    "Không thể xoá deadline đã được nộp", HttpStatus.BAD_REQUEST);
+                    "Không thể xoá deadline đã được nộp hoặc duyệt", HttpStatus.BAD_REQUEST);
         }
 
         deadlineRepository.delete(deadline);
@@ -151,13 +162,16 @@ public class ChapterService {
                 .orElseThrow(() -> new CustomAppException(
                         "Không tìm thấy deadline", HttpStatus.NOT_FOUND));
 
-        if ("submitted".equals(deadline.getStatus())) {
+        String currentStatus = deadline.getStatus();
+        if ("submitted".equals(currentStatus) || "approved".equals(currentStatus)) {
             throw new CustomAppException(
-                    "Nhóm trang này đã được nộp rồi", HttpStatus.BAD_REQUEST);
+                    "Nhóm trang này đã được nộp hoặc duyệt rồi", HttpStatus.BAD_REQUEST);
         }
 
         deadline.setStatus("submitted");
         deadline.setSubmittedAt(LocalDateTime.now());
+        deadline.setReviewedAt(null);
+        deadline.setReviewNote(null);
         deadlineRepository.save(deadline);
 
         Chapter chapter = deadline.getChapter();
@@ -174,6 +188,91 @@ public class ChapterService {
         }
 
         return toDeadlineRes(deadline);
+    }
+
+    @Transactional
+    public PageDeadlineRes reviewPageGroup(Long deadlineId, ReviewPageGroupReq req) {
+        ChapterPageDeadline deadline = deadlineRepository.findById(deadlineId)
+                .orElseThrow(() -> new CustomAppException(
+                        "Không tìm thấy deadline", HttpStatus.NOT_FOUND));
+
+        if (!"submitted".equals(deadline.getStatus())) {
+            throw new CustomAppException(
+                    "Chỉ có thể review nhóm trang đã nộp (status = submitted)",
+                    HttpStatus.BAD_REQUEST);
+        }
+
+        deadline.setStatus(req.getDecision());
+        deadline.setReviewedAt(LocalDateTime.now());
+        deadline.setReviewNote(req.getNote());
+        deadlineRepository.save(deadline);
+
+        Chapter chapter = deadline.getChapter();
+
+        if ("revision".equals(req.getDecision())) {
+            chapterStatusRepository.findByChapterStatusName("in_progress")
+                    .ifPresent(s -> {
+                        chapter.setChapterStatus(s);
+                        chapterRepository.save(chapter);
+                    });
+        } else {
+            long total = deadlineRepository.countByChapterChapterId(chapter.getChapterId());
+            long approved = deadlineRepository.countByChapterChapterIdAndStatus(
+                    chapter.getChapterId(), "approved");
+        }
+
+        return toDeadlineRes(deadline);
+    }
+
+    @Transactional
+    public ChapterRes submitChapterToAdmin(Long chapterId) {
+        User tantou = getCurrentUser();
+
+        Chapter chapter = chapterRepository.findById(chapterId)
+                .orElseThrow(() -> new CustomAppException(
+                        "Không tìm thấy chapter", HttpStatus.NOT_FOUND));
+
+        if (chapter.getSeries().getEditor() == null ||
+                !chapter.getSeries().getEditor().getUserId().equals(tantou.getUserId())) {
+            throw new CustomAppException(
+                    "Bạn không có quyền submit chapter này", HttpStatus.FORBIDDEN);
+        }
+
+        String currentStatus = chapter.getChapterStatus() != null
+                ? chapter.getChapterStatus().getChapterStatusName() : "";
+
+        if (!"pages_submitted".equals(currentStatus)) {
+            throw new CustomAppException(
+                    "Chapter phải ở trạng thái 'pages_submitted' để submit lên admin",
+                    HttpStatus.BAD_REQUEST);
+        }
+
+        boolean hasUnreviewed = deadlineRepository
+                .existsByChapterChapterIdAndStatus(chapterId, "submitted");
+        if (hasUnreviewed) {
+            throw new CustomAppException(
+                    "Vẫn còn nhóm trang chưa được review. Hãy duyệt tất cả trước khi submit.",
+                    HttpStatus.BAD_REQUEST);
+        }
+
+        boolean hasRevision = deadlineRepository
+                .existsByChapterChapterIdAndStatus(chapterId, "revision");
+        if (hasRevision) {
+            throw new CustomAppException(
+                    "Vẫn còn nhóm trang yêu cầu sửa lại. Mangaka cần nộp lại trước.",
+                    HttpStatus.BAD_REQUEST);
+        }
+
+        ChapterStatus pendingPublish = chapterStatusRepository
+                .findByChapterStatusName("pending_publish")
+                .orElseThrow(() -> new CustomAppException(
+                        "Không tìm thấy ChapterStatus 'pending_publish'",
+                        HttpStatus.INTERNAL_SERVER_ERROR));
+
+        chapter.setChapterStatus(pendingPublish);
+        chapterRepository.save(chapter);
+
+        return toResWithSeries(chapter);
     }
 
     private ChapterRes toRes(Chapter c) {
@@ -202,6 +301,20 @@ public class ChapterService {
                 .build();
     }
 
+    private ChapterRes toResWithSeries(Chapter c) {
+        ChapterRes base = toRes(c);
+        Series series = c.getSeries();
+        if (series != null) {
+            base.setSeriesId(series.getSeriesId());
+            base.setSeriesTitle(series.getTitle());
+            if (series.getCreator() != null) {
+                base.setMangakaName(series.getCreator().getFullName());
+                base.setMangakaAvatarUrl(series.getCreator().getAvatarUrl());
+            }
+        }
+        return base;
+    }
+
     private PageDeadlineRes toDeadlineRes(ChapterPageDeadline d) {
         return PageDeadlineRes.builder()
                 .deadlineId(d.getDeadlineId())
@@ -211,6 +324,8 @@ public class ChapterService {
                 .status(d.getStatus())
                 .submittedAt(d.getSubmittedAt())
                 .setByName(d.getSetBy() != null ? d.getSetBy().getFullName() : null)
+                .reviewedAt(d.getReviewedAt())
+                .reviewNote(d.getReviewNote())
                 .build();
     }
 
