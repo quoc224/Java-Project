@@ -87,7 +87,6 @@ class SeriesProposalServiceTest {
         when(userRepository.findById(2L)).thenReturn(Optional.of(mockTantou));
         when(assignmentRepository.findByTantou_UserIdAndMangaka_UserIdAndIsActiveTrue(2L, 1L))
                 .thenReturn(Optional.of(mock(TantouMangakaAssignment.class)));
-        when(genreRepository.findById(anyLong())).thenReturn(Optional.empty());
 
         SeriesProposal saved = SeriesProposal.builder()
                 .proposalId(10L)
