@@ -13,4 +13,7 @@ public interface ChapterRepository extends JpaRepository<Chapter, Long> {
     Optional<Chapter> findBySeriesSeriesIdAndChapterNumber(Long seriesId, int chapterNumber);
 
     List<Chapter> findBySeriesSeriesIdAndSeriesApprovedAtIsNotNullOrderByChapterNumberDesc(Long seriesId);
+    List<Chapter> findBySeriesEditorUserIdAndChapterStatusChapterStatusNameOrderByCreatedAtDesc(
+            Long tantouId, String statusName);
+    List<Chapter> findByChapterStatusChapterStatusNameOrderByCreatedAtDesc(String statusName);
 }

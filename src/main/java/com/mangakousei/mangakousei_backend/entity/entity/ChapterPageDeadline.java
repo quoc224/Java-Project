@@ -40,6 +40,12 @@ public class ChapterPageDeadline {
     @Column(name = "submitted_at")
     private LocalDateTime submittedAt;
 
+    @Column(name = "reviewed_at")
+    private LocalDateTime reviewedAt;
+
+    @Column(name = "review_note", columnDefinition = "TEXT")
+    private String reviewNote;
+
     @Column(name = "created_at", nullable = false, updatable = false)
     private LocalDateTime createdAt;
 
